@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#a9e7f2">
+  <title>Cloud Hop</title>
+  <style>
+    @font-face {
+      font-family: "Press Start 2P";
+      src: url("img/PressStart2P-Regular.ttf") format("truetype");
+      font-style: normal;
+      font-weight: 400;
+      font-display: block;
+    }
+  </style>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Press Start 2P", monospace;
+      background: #a9e7f2;
+      color: #35556c;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-height: 100svh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background: linear-gradient(160deg, #c8f3f5 0%, #a9e7f2 54%, #8bd1e8 100%);
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .game {
+      position: relative;
+      width: min(100vw, 460px);
+      height: min(100svh, 820px);
+      min-height: 440px;
+      overflow: hidden;
+      border-radius: 0;
+      background: linear-gradient(#bdf0f3, #e8f9e9 74%, #c5f0e2);
+      box-shadow: 8px 8px 0 #3a849044;
+      isolation: isolate;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+    }
+
+    .hud {
+      position: absolute;
+      z-index: 1;
+      top: max(18px, env(safe-area-inset-top));
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .score-card {
+      min-width: 118px;
+      padding: 8px 18px 9px;
+      border: 2px solid #ffffff;
+      border-radius: 0;
+      background: #ffffffc9;
+      box-shadow: 4px 4px 0 #588ca344;
+      text-align: center;
+    }
+
+    .score-label {
+      display: block;
+      color: #7195a2;
+      font-size: 8px;
+      font-weight: 400;
+      letter-spacing: .04em;
+    }
+
+    #score {
+      color: #416c80;
+      font-size: 20px;
+      font-weight: 400;
+      line-height: 1.5;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hint {
+      position: absolute;
+      right: 12px;
+      bottom: max(16px, env(safe-area-inset-bottom));
+      left: 12px;
+      color: #35556c;
+      font-size: 8px;
+      font-weight: 400;
+      text-align: center;
+      pointer-events: none;
+      animation: none;
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .overlay {
+      position: absolute;
+      z-index: 2;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      background: #d7f5f2e8;
+      text-align: center;
+    }
+
+    .overlay[hidden] { display: none; }
+
+    .panel {
+      width: min(100%, 300px);
+      padding: 28px 22px 24px;
+      border: 4px solid #ffffff;
+      border-radius: 0;
+      background: #fffef2ee;
+      box-shadow: 8px 8px 0 #548e9430;
+    }
+
+    .mascot {
+      display: block;
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 8px;
+      image-rendering: pixelated;
+    }
+
+    h1 {
+      margin: 8px 0;
+      color: #4a7c8c;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    .message {
+      margin: 12px 0 20px;
+      color: #71919a;
+      font-size: 8px;
+      line-height: 2;
+    }
+
+    button {
+      min-height: 44px;
+      padding: 0 16px;
+      border: 0;
+      border-radius: 0;
+      background: #ffca65;
+      box-shadow: 0 4px 0 #e7a94c;
+      color: #76552d;
+      font: inherit;
+      font-size: 8px;
+      font-weight: 400;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    button:active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 #e7a94c;
+    }
+
+    @media (max-height: 520px) {
+      .game { min-height: 0; border-radius: 0; }
+      .panel { padding: 18px 22px; }
+      .mascot { width: 44px; height: 44px; }
+      .message { margin: 7px 0 14px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="game" aria-label="Cloud Hop endless platform game">
+    <canvas id="gameCanvas" aria-label="Tap left or right to steer the bouncing chick"></canvas>
+    <div class="hud">
+      <div class="score-card" aria-live="polite">
+        <span class="score-label">SCORE</span>
+        <span id="score">0</span>
+      </div>
+    </div>
+    <div class="hint">TAP LEFT OR RIGHT TO STEER</div>
+    <section class="overlay" id="overlay">
+      <div class="panel">
+        <img class="mascot" src="img/chick.png" alt="">
+        <h1 id="title">Cloud Hop</h1>
+        <p class="message" id="message">Bounce from cloud to cloud and see how high you can go!</p>
+        <button id="startButton" type="button">LET'S HOP!</button>
+      </div>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const canvas = document.getElementById("gameCanvas");
+      const context = canvas.getContext("2d");
+      const scoreDisplay = document.getElementById("score");
+      const overlay = document.getElementById("overlay");
+      const title = document.getElementById("title");
+      const message = document.getElementById("message");
+      const startButton = document.getElementById("startButton");
+      const game = document.querySelector(".game");
+
+      const gravity = 0.32;
+      const jumpPower = -8.2;
+      const playerRadius = 17;
+      const platforms = [];
+      function loadImage(src) {
+        const image = new Image();
+        image.onload = () => {
+          if (!running) draw();
+        };
+        image.onerror = () => console.error(`Unable to load game image: ${src}`);
+        image.src = src;
+        return image;
+      }
+
+      const backgroundImage = loadImage("img/background.png");
+      const platformImage = loadImage("img/platform.png");
+      const playerImage = loadImage("img/chick.png");
+      let width = 0;
+      let height = 0;
+      let scale = 1;
+      let player;
+      let cameraY = 0;
+      let score = 0;
+      let running = false;
+      let lastTime = 0;
+      let animationFrame = 0;
+
+      function resize() {
+        const bounds = game.getBoundingClientRect();
+        scale = Math.min(window.devicePixelRatio || 1, 2);
+        width = bounds.width;
+        height = bounds.height;
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
+        context.setTransform(scale, 0, 0, scale, 0, 0);
+        context.imageSmoothingEnabled = false;
+        if (!running) draw();
+      }
+
+      function makePlatform(x, y, platformWidth) {
+        return { x, y, width: platformWidth };
+      }
+
+      function makePlatformAbove(platform) {
+        const platformWidth = 108 + Math.random() * 20;
+        const gap = 76 + Math.min(score * 0.1, 10) + Math.random() * 12;
+        const maxShift = Math.min(70, width * 0.16);
+        const center = platform.x + platform.width / 2 + (Math.random() * 2 - 1) * maxShift;
+        const x = Math.max(12, Math.min(width - platformWidth - 12, center - platformWidth / 2));
+        return makePlatform(x, platform.y - gap, platformWidth);
+      }
+
+      function reset() {
+        platforms.length = 0;
+        score = 0;
+        cameraY = 0;
+        scoreDisplay.textContent = "0";
+        player = {
+          x: width / 2,
+          y: height - 108,
+          vx: 0,
+          vy: 0,
+          steerDirection: 0,
+          steerTime: 0
+        };
+        let platform = makePlatform(width / 2 - 60, height - 76, 120);
+        platforms.push(platform);
+        while (platform.y > -height) {
+          platform = makePlatformAbove(platform);
+          platforms.push(platform);
+        }
+      }
+
+      function start() {
+        cancelAnimationFrame(animationFrame);
+        reset();
+        running = true;
+        overlay.hidden = true;
+        lastTime = performance.now();
+        animationFrame = requestAnimationFrame(loop);
+      }
+
+      function endGame() {
+        running = false;
+        title.textContent = "Nice try!";
+        message.textContent = `You scored ${score} points. Ready for another hop?`;
+        startButton.textContent = "PLAY AGAIN";
+        overlay.hidden = false;
+      }
+
+      function steer(clientX) {
+        if (!running) return;
+        const bounds = canvas.getBoundingClientRect();
+        const tapX = clientX - bounds.left;
+        player.steerDirection = tapX < bounds.width / 2 ? -1 : 1;
+        player.steerTime = 0.35;
+      }
+
+      function addPlatform() {
+        const highestPlatformY = Math.min(...platforms.map(platform => platform.y));
+        if (highestPlatformY - cameraY > -height - 20) {
+          const highestPlatform = platforms.reduce((highest, platform) => platform.y < highest.y ? platform : highest);
+          platforms.push(makePlatformAbove(highestPlatform));
+        }
+      }
+
+      function update(delta) {
+        const step = Math.min(delta / 16.67, 2);
+        player.vy += gravity * step;
+        player.x += player.vx * step;
+        player.y += player.vy * step;
+        player.steerTime = Math.max(0, player.steerTime - step / 60);
+        const targetVx = player.steerTime > 0 ? player.steerDirection * 3 : 0;
+        player.vx += (targetVx - player.vx) * Math.min(1, 0.16 * step);
+
+        if (player.x < -playerRadius) player.x = width + playerRadius;
+        if (player.x > width + playerRadius) player.x = -playerRadius;
+
+        if (player.vy > 0) {
+          for (const platform of platforms) {
+            const previousBottom = player.y - player.vy * step + playerRadius;
+            const currentBottom = player.y + playerRadius;
+            if (previousBottom <= platform.y && currentBottom >= platform.y &&
+                player.x + playerRadius > platform.x && player.x - playerRadius < platform.x + platform.width) {
+              player.y = platform.y - playerRadius;
+              player.vy = jumpPower;
+              break;
+            }
+          }
+        }
+
+        const scrollLine = height * 0.43;
+        if (player.y - cameraY < scrollLine) {
+          cameraY = player.y - scrollLine;
+        }
+
+        const climbed = Math.max(0, Math.floor(-cameraY / 10));
+        if (climbed > score) {
+          score = climbed;
+          scoreDisplay.textContent = String(score);
+        }
+
+        for (let i = platforms.length - 1; i >= 0; i--) {
+          if (platforms[i].y - cameraY > height + 30) platforms.splice(i, 1);
+        }
+        addPlatform();
+
+        if (player.y - cameraY > height + 45) endGame();
+      }
+
+      function drawPlayer() {
+        if (playerImage.complete && playerImage.naturalWidth) {
+          context.drawImage(playerImage, player.x - 28, player.y - cameraY - 28, 56, 56);
+        }
+      }
+
+      function draw() {
+        context.clearRect(0, 0, width, height);
+        if (backgroundImage.complete && backgroundImage.naturalWidth) {
+          context.drawImage(backgroundImage, 0, 0, width, height);
+        } else {
+          context.fillStyle = "#dff7e9";
+          context.fillRect(0, 0, width, height);
+        }
+
+        for (const platform of platforms) {
+          const screenY = platform.y - cameraY;
+          if (platformImage.complete && platformImage.naturalWidth) {
+            const imageHeight = platform.width * platformImage.naturalHeight / platformImage.naturalWidth;
+            context.drawImage(platformImage, platform.x, screenY - imageHeight * 0.21, platform.width, imageHeight);
+          }
+        }
+        if (player) drawPlayer();
+      }
+
+      function loop(now) {
+        if (!running) return;
+        update(now - lastTime);
+        lastTime = now;
+        draw();
+        if (running) animationFrame = requestAnimationFrame(loop);
+      }
+
+      canvas.addEventListener("pointerdown", event => {
+        event.preventDefault();
+        steer(event.clientX);
+      });
+
+      window.addEventListener("keydown", event => {
+        if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") {
+          if (running) {
+            player.steerDirection = -1;
+            player.steerTime = 1;
+          }
+        } else if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") {
+          if (running) {
+            player.steerDirection = 1;
+            player.steerTime = 1;
+          }
+        } else if ((event.key === " " || event.key === "Enter") && !running) {
+          start();
+        }
+      });
+
+      window.addEventListener("keyup", event => {
+        if (event.key === "ArrowLeft" || event.key === "ArrowRight" ||
+            event.key.toLowerCase() === "a" || event.key.toLowerCase() === "d") {
+          if (player) player.steerTime = 0;
+        }
+      });
+
+      startButton.addEventListener("click", start);
+      window.addEventListener("resize", resize);
+      resize();
+      reset();
+      draw();
+    })();
+  </script>
+</body>
+</html>
